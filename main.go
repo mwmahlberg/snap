@@ -16,59 +16,65 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"os"
 
 	"github.com/mwmahlberg/snap/internal"
+
 	dbg "github.com/tj/go-debug"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	unsnap      bool
-	inFileName  string
-	outFileName string
-	file        *os.File
+	unsnap  = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
+	inFile  = kingpin.Arg("file", "file to (de)compress").Required().File()
+//	keep    = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
+	outFile *os.File
 )
 
 func init() {
+
 	debug := dbg.Debug("INIT")
-	flag.BoolVar(&unsnap, "u", false, "unsnap source file")
-	flag.Parse()
+	kingpin.Version("0.1")
+	kingpin.CommandLine.HelpFlag.Short('h')
 
-	if inFileName = flag.Arg(0); inFileName == "" {
-		fmt.Println("no input file given")
+	kingpin.Parse()
+
+	if os.Args[0] == "unsnap" {
+		debug("Called as 'unsnap'. Decompressing source file")
+		*unsnap = true
 	}
 
-	if unsnap {
-		in := []rune(inFileName)
-		outFileName = string(in[:len(in)-3])
-		debug("Name: %s", outFileName)
-	} else {
-		outFileName = inFileName + `.sz`
-	}
 }
 
 func main() {
+	var debug = dbg.Debug("MAIN")
 
-	s, err := internal.NewSnapper(inFileName, outFileName)
-	if err != nil {
-		fmt.Printf("%v", err)
-		os.Exit(1)
+	var outFileName string
+
+	if *unsnap {
+		in := []rune((*inFile).Name())
+		outFileName = string(in[:len(in)-3])
+		debug("Name: %s", outFileName)
+	} else {
+		outFileName = (*inFile).Name() + `.sz`
 	}
 
-	if unsnap {
-		if err := s.Unsnap(); err != nil {
-			fmt.Printf("%v", err)
-			os.Exit(1)
-		}
+	fi, err := (*inFile).Stat()
+	kingpin.FatalIfError(err,"unable to access '%s'", (*inFile).Name())
 
+	outFile, err := os.OpenFile(outFileName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
+	kingpin.FatalIfError(err,"unable to open '%s'",(*inFile).Name())
+
+	s, err := internal.NewSnapper(*inFile, outFile)
+	kingpin.FatalIfError(err,"unable to initialize compression")
+
+	if *unsnap {
+		err := s.Unsnap()
+		kingpin.FatalIfError(err,"error during decompression")
 		return
 	}
 
-	if err := s.Snap(); err != nil {
-		fmt.Printf("%v", err)
-		os.Exit(1)
-	}
+	err = s.Snap()
+	kingpin.FatalIfError(err,"error during compression")
 
 }

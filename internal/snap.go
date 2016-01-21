@@ -25,32 +25,18 @@ import (
 )
 
 type Snapper struct {
-	inFileName  string
-	outFileName string
 	inFile      *os.File
 	outFile     *os.File
 	inBuf       *bufio.Reader
 	outBuf      *bufio.Writer
 }
 
-func NewSnapper(infile, outfile string) (*Snapper, error) {
+func NewSnapper(infile,outfile *os.File) (*Snapper, error) {
 	
-	snapper := &Snapper{inFileName: infile, outFileName: outfile}
-
-	if in, err := os.OpenFile(infile, os.O_RDONLY, 0600); err == nil {
-		snapper.inFile = in
-	} else {
-		return nil, err
-	}
+	snapper := &Snapper{outFile: outfile,inFile:infile}
 
 	snapper.inBuf = bufio.NewReader(snapper.inFile)
 
-	inFi, _ := snapper.inFile.Stat()
-	if out, err := os.OpenFile(outfile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, inFi.Mode()); err == nil {
-		snapper.outFile = out
-	} else {
-		return nil, err
-	}
 	snapper.outBuf = bufio.NewWriter(snapper.outFile)
 
 	return snapper, nil
