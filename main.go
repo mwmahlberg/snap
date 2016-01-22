@@ -16,8 +16,8 @@
 package main
 
 import (
-	"os"
 	"bufio"
+	"os"
 
 	"github.com/mwmahlberg/snap/internal"
 
@@ -28,14 +28,16 @@ import (
 var (
 	unsnap  = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
 	inFile  = kingpin.Arg("file", "file to (de)compress").Required().File()
-//	keep    = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
+	keep    = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
 	outFile *os.File
 )
 
 func init() {
 
 	debug := dbg.Debug("INIT")
-	kingpin.Version("0.1")
+	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("0.1").Author("Markus W Mahlberg")
+	kingpin.CommandLine.Author("Markus W Mahlberg")
+	kingpin.CommandLine.Help="tool to (de-)compress files using snappy algorithm"
 	kingpin.CommandLine.HelpFlag.Short('h')
 
 	kingpin.Parse()
@@ -48,24 +50,24 @@ func init() {
 }
 
 func main() {
+
 	var debug = dbg.Debug("MAIN")
-	defer (*inFile).Close()
-	
+
 	var outFileName string
 
 	if *unsnap {
 		in := []rune((*inFile).Name())
 		outFileName = string(in[:len(in)-3])
-		debug("Name: %s", outFileName)
 	} else {
 		outFileName = (*inFile).Name() + `.sz`
 	}
+	debug("Outfile: %s", outFileName)
 
 	fi, err := (*inFile).Stat()
-	kingpin.FatalIfError(err,"unable to access '%s'", (*inFile).Name())
+	kingpin.FatalIfError(err, "unable to access '%s'", (*inFile).Name())
 
 	outFile, err := os.OpenFile(outFileName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
-	kingpin.FatalIfError(err,"unable to open '%s'",(*inFile).Name())
+	kingpin.FatalIfError(err, "unable to open '%s'", (*inFile).Name())
 	defer outFile.Close()
 
 	inbuf := bufio.NewReader(*inFile)
@@ -76,11 +78,17 @@ func main() {
 
 	if *unsnap {
 		err := s.Unsnap()
-		kingpin.FatalIfError(err,"error during decompression")
-		return
+		kingpin.FatalIfError(err, "error during decompression")
+	} else {
+		err = s.Snap()
+		kingpin.FatalIfError(err, "error during compression")
 	}
+	
+	(*inFile).Close()
 
-	err = s.Snap()
-	kingpin.FatalIfError(err,"error during compression")
-
+	if !(*keep) {
+		debug("Removing source file after completion")
+		err := os.Remove((*inFile).Name())
+		kingpin.FatalIfError(err, "error while removing '%s': %v", (*inFile).Name(), err)
+	}
 }
