@@ -49,6 +49,10 @@ func init() {
 	if os.Args[0] == "unsnap" {
 		debug("Called as 'unsnap'. Decompressing source file")
 		*unsnap = true
+	} else if os.Args[0] == "scat" || os.Args[0] == "szcat" {
+		debug("Called as s(z)cat. Decompressing source file to stdout")
+		*unsnap = true
+		*stdout = true
 	}
 
 }
