@@ -17,6 +17,7 @@ package main
 
 import (
 	"os"
+	"bufio"
 
 	"github.com/mwmahlberg/snap/internal"
 
@@ -48,7 +49,8 @@ func init() {
 
 func main() {
 	var debug = dbg.Debug("MAIN")
-
+	defer (*inFile).Close()
+	
 	var outFileName string
 
 	if *unsnap {
@@ -64,9 +66,13 @@ func main() {
 
 	outFile, err := os.OpenFile(outFileName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 	kingpin.FatalIfError(err,"unable to open '%s'",(*inFile).Name())
+	defer outFile.Close()
 
-	s, err := internal.NewSnapper(*inFile, outFile)
-	kingpin.FatalIfError(err,"unable to initialize compression")
+	inbuf := bufio.NewReader(*inFile)
+	outbuf := bufio.NewWriter(outFile)
+	defer outbuf.Flush()
+
+	s := internal.NewSnapper(inbuf, outbuf)
 
 	if *unsnap {
 		err := s.Unsnap()

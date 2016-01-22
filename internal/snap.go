@@ -18,39 +18,29 @@ package internal
 import (
 	"bufio"
 	"io"
-	"os"
 
 	"github.com/golang/snappy"
 	dbg "github.com/tj/go-debug"
 )
 
 type Snapper struct {
-	inFile      *os.File
-	outFile     *os.File
-	inBuf       *bufio.Reader
-	outBuf      *bufio.Writer
+	in  io.Reader
+	out io.Writer
 }
 
-func NewSnapper(infile,outfile *os.File) (*Snapper, error) {
-	
-	snapper := &Snapper{outFile: outfile,inFile:infile}
+func NewSnapper(in io.Reader, out io.Writer) (*Snapper) {
 
-	snapper.inBuf = bufio.NewReader(snapper.inFile)
+	snapper := &Snapper{out: out, in: in}
 
-	snapper.outBuf = bufio.NewWriter(snapper.outFile)
-
-	return snapper, nil
+	return snapper
 }
 
 func (s *Snapper) Snap() error {
 	debug := dbg.Debug("SNAP")
-	defer s.inFile.Close()
-	
-	snap := bufio.NewWriter(snappy.NewWriter(s.outFile))
-	defer s.outFile.Close()
-	defer snap.Flush()
 
-	if w, err := io.Copy(snap, s.inBuf); err != nil {
+	snap := snappy.NewWriter(s.out)
+
+	if w, err := io.Copy(snap, s.in); err != nil {
 		debug("Error compressing file after %d bytes: %v", w, err)
 		return err
 	}
@@ -61,13 +51,9 @@ func (s *Snapper) Snap() error {
 func (s *Snapper) Unsnap() error {
 	debug := dbg.Debug("UNSNAP")
 
-	defer s.inFile.Close()
-	defer s.outFile.Close()
-	defer s.outBuf.Flush()
+	usnap := snappy.NewReader(bufio.NewReader(s.in))
 
-	usnap := snappy.NewReader(bufio.NewReader(s.inFile))
-
-	if w, err := io.Copy(s.outBuf, usnap); err != nil {
+	if w, err := io.Copy(s.out, usnap); err != nil {
 		debug("Error decompressing file after %d bytes: %v", w, err)
 		return err
 	}
