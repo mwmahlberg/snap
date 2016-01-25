@@ -30,6 +30,7 @@ var (
 	keep   = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
 
 	stdout = kingpin.Flag("stdout", "write to stdout").Short('c').Default("false").Bool()
+	suffix = kingpin.Flag("suffix", "changes the default suffix from '.sz' to the given value").Short('S').Default(".sz").String()
 
 	inFile = kingpin.Arg("file", "file to (de)compress").Required().File()
 
@@ -74,7 +75,7 @@ func main() {
 		outFile, outErr = os.OpenFile(string(in[:len(in)-3]), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 
 	} else {
-		outFile, outErr = os.OpenFile((*inFile).Name()+`.sz`, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
+		outFile, outErr = os.OpenFile((*inFile).Name()+*suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 
 	}
 	defer outFile.Close()
