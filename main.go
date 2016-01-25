@@ -16,8 +16,8 @@
 package main
 
 import (
-	"os"
 	"bufio"
+	"os"
 
 	"github.com/mwmahlberg/snap/internal"
 
@@ -26,16 +26,23 @@ import (
 )
 
 var (
-	unsnap  = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
-	inFile  = kingpin.Arg("file", "file to (de)compress").Required().File()
-//	keep    = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
+	unsnap = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
+	keep   = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
+
+	stdout = kingpin.Flag("stdout", "write to stdout").Short('c').Default("false").Bool()
+	suffix = kingpin.Flag("suffix", "changes the default suffix from '.sz' to the given value").Short('S').Default(".sz").String()
+
+	inFile = kingpin.Arg("file", "file to (de)compress").Required().File()
+
 	outFile *os.File
 )
 
 func init() {
 
 	debug := dbg.Debug("INIT")
-	kingpin.Version("0.1")
+	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("0.1").Author("Markus W Mahlberg")
+	kingpin.CommandLine.Author("Markus W Mahlberg")
+	kingpin.CommandLine.Help = "tool to (de-)compress files using snappy algorithm"
 	kingpin.CommandLine.HelpFlag.Short('h')
 
 	kingpin.Parse()
@@ -43,30 +50,39 @@ func init() {
 	if os.Args[0] == "unsnap" {
 		debug("Called as 'unsnap'. Decompressing source file")
 		*unsnap = true
+	} else if os.Args[0] == "scat" || os.Args[0] == "szcat" {
+		debug("Called as s(z)cat. Decompressing source file to stdout")
+		*unsnap = true
+		*stdout = true
 	}
 
 }
 
 func main() {
-	var debug = dbg.Debug("MAIN")
-	defer (*inFile).Close()
-	
-	var outFileName string
 
-	if *unsnap {
-		in := []rune((*inFile).Name())
-		outFileName = string(in[:len(in)-3])
-		debug("Name: %s", outFileName)
-	} else {
-		outFileName = (*inFile).Name() + `.sz`
-	}
+	var debug = dbg.Debug("MAIN")
 
 	fi, err := (*inFile).Stat()
-	kingpin.FatalIfError(err,"unable to access '%s'", (*inFile).Name())
+	kingpin.FatalIfError(err, "unable to access '%s'", (*inFile).Name())
 
-	outFile, err := os.OpenFile(outFileName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
-	kingpin.FatalIfError(err,"unable to open '%s'",(*inFile).Name())
+	var outFile *os.File
+	var outErr error
+
+	if *stdout {
+		outFile = os.Stdout
+	} else if *unsnap {
+		in := []rune((*inFile).Name())
+		outFile, outErr = os.OpenFile(string(in[:len(in)-3]), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
+
+	} else {
+		outFile, outErr = os.OpenFile((*inFile).Name()+*suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
+
+	}
 	defer outFile.Close()
+
+	kingpin.FatalIfError(outErr, "unable to open '%s'", (*inFile).Name())
+
+	debug("Outfile: %s", outFile.Name())
 
 	inbuf := bufio.NewReader(*inFile)
 	outbuf := bufio.NewWriter(outFile)
@@ -76,11 +92,17 @@ func main() {
 
 	if *unsnap {
 		err := s.Unsnap()
-		kingpin.FatalIfError(err,"error during decompression")
-		return
+		kingpin.FatalIfError(err, "error during decompression")
+	} else {
+		err = s.Snap()
+		kingpin.FatalIfError(err, "error during compression")
 	}
 
-	err = s.Snap()
-	kingpin.FatalIfError(err,"error during compression")
+	(*inFile).Close()
 
+	if !(*keep) {
+		debug("Removing source file after completion")
+		err := os.Remove((*inFile).Name())
+		kingpin.FatalIfError(err, "error while removing '%s': %v", (*inFile).Name(), err)
+	}
 }
