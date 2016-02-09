@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"github.com/mwmahlberg/snap/internal"
+	    "github.com/andrew-d/go-termutil"
+
 
 	dbg "github.com/tj/go-debug"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -32,7 +34,7 @@ var (
 	stdout = kingpin.Flag("stdout", "write to stdout").Short('c').Default("false").Bool()
 	suffix = kingpin.Flag("suffix", "changes the default suffix from '.sz' to the given value").Short('S').Default(".sz").String()
 
-	inFile = kingpin.Arg("file", "file to (de)compress").Required().File()
+	inFile = kingpin.Arg("file", "file to (de)compress").File()
 
 	outFile *os.File
 )
@@ -52,6 +54,7 @@ func init() {
 		*unsnap = true
 	} else if os.Args[0] == "scat" || os.Args[0] == "szcat" {
 		debug("Called as s(z)cat. Decompressing source file to stdout")
+		*keep = true
 		*unsnap = true
 		*stdout = true
 	}
@@ -62,6 +65,13 @@ func main() {
 
 	var debug = dbg.Debug("MAIN")
 
+	if !termutil.Isatty(os.Stdin.Fd()){
+		debug("Reading from STDIN")
+		*inFile = os.Stdin
+		*keep = true
+		*stdout = true
+	}
+
 	fi, err := (*inFile).Stat()
 	kingpin.FatalIfError(err, "unable to access '%s'", (*inFile).Name())
 
@@ -70,13 +80,13 @@ func main() {
 
 	if *stdout {
 		outFile = os.Stdout
+		*keep = true
 	} else if *unsnap {
 		in := []rune((*inFile).Name())
 		outFile, outErr = os.OpenFile(string(in[:len(in)-3]), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 
 	} else {
 		outFile, outErr = os.OpenFile((*inFile).Name()+*suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
-
 	}
 	defer outFile.Close()
 
