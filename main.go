@@ -28,7 +28,13 @@ import (
 var (
 
 	// Commit upon which snap was built, set by build flag
-	Commit string
+	Commit = "unknown"
+
+	// Version is the semantic version number of the current binary, should be set by build flag
+	//
+	//     go build -ldflags "-X main.Version=$(git describe --tags $(git rev-list --tags --max-count=1)"
+	Version = "0.0.0"
+
 	unsnap = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
 	keep   = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
 
@@ -43,7 +49,7 @@ var (
 func init() {
 
 	debug := dbg.Debug("INIT")
-	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("v0.1 (git-rev: " + Commit + ")").Author("Markus W Mahlberg")
+	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("Version: " + Version + "(git-rev: " + Commit + ")").Author("Markus W Mahlberg")
 	kingpin.CommandLine.Author("Markus W Mahlberg")
 	kingpin.CommandLine.Help = "tool to (de-)compress files using snappy algorithm"
 	kingpin.CommandLine.HelpFlag.Short('h')
