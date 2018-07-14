@@ -20,3 +20,4 @@ deploy:
   file: dist/*
   on:
     repo: mwmahlberg/snap
+    tags: true
