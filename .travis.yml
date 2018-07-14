@@ -8,7 +8,7 @@ matrix:
   allow_failures:
   - go: master
 before_install:
-- sudo apt-get install -y zip gzip tar
+- sudo apt-get install -y git zip gzip tar
 install:
 - go get -u github.com/golang/dep/cmd/dep
 - dep ensure
