@@ -1,10 +1,9 @@
-.PNONY: all dist
+.PNONY:  dist clean
 
 GIT_HASH=$(shell git rev-parse HEAD)
 HOSTOS=$(shell go env GOHOSTOS)
 LDFLAGS=-X main.Commit=$(GIT_HASH)
 TAR=gnutar
-all: snap snap.exe
 
 build/snap.linux: main.go snap.go
 	GOOS="linux" go build -v -o $@ -ldflags "$(LDFLAGS)" 
