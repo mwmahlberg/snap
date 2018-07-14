@@ -1,28 +1,22 @@
 language: go
-
 go:
-  - "1.8"
-  - "1.9"
-  - "1.10.x"
-  - master
-
+- '1.8'
+- '1.9'
+- 1.10.x
+- master
 matrix:
   allow_failures:
-    - go: master
-
+  - go: master
 before_install:
-  - sudo apt-get install -y zip gzip tar
-
+- sudo apt-get install -y zip gzip tar
 install:
-  - go get -u github.com/golang/dep/cmd/dep
-  - dep ensure
-
+- go get -u github.com/golang/dep/cmd/dep
+- dep ensure
 deploy:
   provider: releases
-  api_key: $GITHUB_AUTH_TOKEN
+  api_key:
+    secure: HNb5JIfwWGBW3P+WfLfUbHfXdwrN8z94lwB7tGwGWYZiZAMBcIPP8ZAlTpPtJTctJTbxff5TXN3pkV2pBpJCaQedY3y/sz3rVJ6+bthTOPOkaZANoeLypyTpY3WY6CK+MlgLTi9ZoZQ7Jtf4UB5KUvW81bWXB7NZBpNQz5b8C/1qn3OT/bA/W8j8wZpxBDb9X3svCDyhI2Uz/pUDXBAnMXnoRwih052+6a+G9ggiiv559YWlQqHBjbyOP7ZxMWUVFfNWomxZfLdifXnH6tWbUS+WAM7im9ChdM3f0Dn+MW1U5MxCEYWsKT5k75l0mqJMGOuRmjjlpdLVY94v2UchLZx+ktegZF0mmeM2relywnPhZpCEvbUYaJkvON2wtR/vJliR1FasnuFUeABJ2iU7UXGIX/jJxCNGlXj7IGkzpAf2L0trKS3ZWqt9SwIFCFxjZK62FDV5CSIjgc1xtse3eGGFtq+jHioyO3zaHfTd7gJAjcH+Yr6k54D/0plapyt9LiooB4Bt7vTUd/voPU+Hei6el8WYyepVPWIneOmi07Urv6KMqFVslWuh9qd/UJHFG45GYOf73QGBnLU2mgm2iuMhRPblHEB9RRH2EtczbBjqXNE3v38ZPSVYNTJaTZOZ9Gs0/niwCMAPihyyNtmzBxupWJUs7pC5mr3nGV2Iawc=
   file_glob: true
   file: dist/*
-  skip_cleanup: true
   on:
-    go: '1.10.x'
-    tags: true
+    repo: mwmahlberg/snap
