@@ -4,3 +4,5 @@ cover.out
 compressed.txt.sz
 decompressed.txt
 vendor
+build
+dist

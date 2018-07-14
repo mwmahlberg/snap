@@ -1,0 +1,27 @@
+language: go
+
+go:
+  - "1.8"
+  - "1.9"
+  - "1.10.x"
+  - master
+
+matrix:
+  allow_failures:
+    - go: master
+
+before_install:
+  - sudo apt-get install -y zip gzip tar
+
+install:
+  - go get -u github.com/golang/dep/cmd/dep
+  - dep ensure
+
+deploy:
+  provider: releases
+  file_glob: true
+  file: dist/*
+  skip_cleanup: true
+  on:
+    go: '1.10.x'
+    tags: true
