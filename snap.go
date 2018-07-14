@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package internal
+package main
 
 import (
 	"bufio"
 	"io"
 
 	"github.com/golang/snappy"
-	dbg "github.com/tj/go-debug"
+	dbg "github.com/visionmedia/go-debug"
 )
 
 type Snapper struct {
@@ -28,7 +28,7 @@ type Snapper struct {
 	out io.Writer
 }
 
-func NewSnapper(in io.Reader, out io.Writer) (*Snapper) {
+func NewSnapper(in io.Reader, out io.Writer) *Snapper {
 
 	snapper := &Snapper{out: out, in: in}
 
@@ -38,8 +38,7 @@ func NewSnapper(in io.Reader, out io.Writer) (*Snapper) {
 func (s *Snapper) Snap() error {
 	debug := dbg.Debug("SNAP")
 
-	snap := snappy.NewWriter(s.out)
-
+	snap := snappy.NewBufferedWriter(s.out)
 	if w, err := io.Copy(snap, s.in); err != nil {
 		debug("Error compressing file after %d bytes: %v", w, err)
 		return err

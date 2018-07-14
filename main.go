@@ -19,15 +19,16 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/mwmahlberg/snap/internal"
-	    "github.com/andrew-d/go-termutil"
+	"github.com/andrew-d/go-termutil"
 
-
-	dbg "github.com/tj/go-debug"
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin"
+	dbg "github.com/visionmedia/go-debug"
 )
 
 var (
+
+	// Commit upon which snap was built, set by build flag
+	Commit string
 	unsnap = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
 	keep   = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
 
@@ -42,7 +43,7 @@ var (
 func init() {
 
 	debug := dbg.Debug("INIT")
-	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("0.1").Author("Markus W Mahlberg")
+	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("v0.1 (git-rev: " + Commit + ")").Author("Markus W Mahlberg")
 	kingpin.CommandLine.Author("Markus W Mahlberg")
 	kingpin.CommandLine.Help = "tool to (de-)compress files using snappy algorithm"
 	kingpin.CommandLine.HelpFlag.Short('h')
@@ -65,15 +66,20 @@ func main() {
 
 	var debug = dbg.Debug("MAIN")
 
-	if !termutil.Isatty(os.Stdin.Fd()){
+	if !termutil.Isatty(os.Stdin.Fd()) {
 		debug("Reading from STDIN")
 		*inFile = os.Stdin
 		*keep = true
 		*stdout = true
 	}
 
+	if *inFile == nil {
+		kingpin.Errorf("No input file given")
+		os.Exit(2)
+	}
+
 	fi, err := (*inFile).Stat()
-	kingpin.FatalIfError(err, "unable to access '%s'", (*inFile).Name())
+	debug("Infile %s", fi.Name())
 
 	var outFile *os.File
 	var outErr error
@@ -89,7 +95,6 @@ func main() {
 		outFile, outErr = os.OpenFile((*inFile).Name()+*suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 	}
 	defer outFile.Close()
-
 	kingpin.FatalIfError(outErr, "unable to open '%s'", (*inFile).Name())
 
 	debug("Outfile: %s", outFile.Name())
@@ -98,7 +103,7 @@ func main() {
 	outbuf := bufio.NewWriter(outFile)
 	defer outbuf.Flush()
 
-	s := internal.NewSnapper(inbuf, outbuf)
+	s := NewSnapper(inbuf, outbuf)
 
 	if *unsnap {
 		err := s.Unsnap()
