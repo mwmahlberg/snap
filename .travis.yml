@@ -23,4 +23,5 @@ deploy:
   file: dist/*
   skip_cleanup: true
   on:
+    go: '1.10.x'
     tags: true
