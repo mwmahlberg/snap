@@ -19,9 +19,7 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/andrew-d/go-termutil"
-
-	"github.com/alecthomas/kingpin"
+	"github.com/alecthomas/kong"
 	dbg "github.com/visionmedia/go-debug"
 )
 
@@ -35,95 +33,103 @@ var (
 	//     go build -ldflags "-X main.Version=$(git describe --tags $(git rev-list --tags --max-count=1)"
 	Version = "0.0.0"
 
-	unsnap = kingpin.Flag("unsnap", "uncompress file").Short('u').Bool()
-	keep   = kingpin.Flag("keep", "keep original file").Short('k').Default("false").Bool()
-
-	stdout = kingpin.Flag("stdout", "write to stdout").Short('c').Default("false").Bool()
-	suffix = kingpin.Flag("suffix", "changes the default suffix from '.sz' to the given value").Short('S').Default(".sz").String()
-
-	inFile = kingpin.Arg("file", "file to (de)compress").File()
-
-	outFile *os.File
-)
-
-func init() {
-
-	debug := dbg.Debug("INIT")
-	kingpin.UsageTemplate(kingpin.DefaultUsageTemplate).Version("Version: " + Version + "(git-rev: " + Commit + ")").Author("Markus W Mahlberg")
-	kingpin.CommandLine.Author("Markus W Mahlberg")
-	kingpin.CommandLine.Help = "tool to (de-)compress files using snappy algorithm"
-	kingpin.CommandLine.HelpFlag.Short('h')
-
-	kingpin.Parse()
-
-	if os.Args[0] == "unsnap" {
-		debug("Called as 'unsnap'. Decompressing source file")
-		*unsnap = true
-	} else if os.Args[0] == "scat" || os.Args[0] == "szcat" {
-		debug("Called as s(z)cat. Decompressing source file to stdout")
-		*keep = true
-		*unsnap = true
-		*stdout = true
+	cfg struct {
+		Unsnap  bool     `help:"uncompress file instead of compressing it"`
+		Keep    bool     `help:"keep original file"`
+		Stdout  bool     `help:"write to stdout"`
+		Suffix  string   `help:"set the suffix" default:".sz"`
+		InFile  *os.File `help:"file to (de)compress" arg:"" optional:""`
+		Version kong.VersionFlag
 	}
-
-}
+)
 
 func main() {
 
 	var debug = dbg.Debug("MAIN")
 
-	if !termutil.Isatty(os.Stdin.Fd()) {
-		debug("Reading from STDIN")
-		*inFile = os.Stdin
-		*keep = true
-		*stdout = true
+	ctx := kong.Parse(
+		&cfg,
+		kong.Name(os.Args[0]),
+		kong.Description("(de-)compress files using snappy algorithm"),
+		kong.Vars{
+			"version": Version + " " + Commit,
+		},
+	)
+
+	if os.Args[0] == "unsnap" {
+		debug("Called as 'unsnap'. Decompressing source file")
+		cfg.Unsnap = true
+	} else if os.Args[0] == "scat" || os.Args[0] == "szcat" {
+		debug("Called as s(z)cat. Decompressing source file to stdout")
+		cfg.Keep = true
+		cfg.Unsnap = true
+		cfg.Stdout = true
 	}
 
-	if *inFile == nil {
-		kingpin.Errorf("No input file given")
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		debug("Reading from STDIN")
+		cfg.InFile = os.Stdin
+		cfg.Keep = true
+		cfg.Stdout = true
+	} else if cfg.InFile == nil {
+		ctx.Printf("No input file given.")
 		os.Exit(2)
 	}
 
-	fi, err := (*inFile).Stat()
+	fi, _ := (*cfg.InFile).Stat()
 	debug("Infile %s", fi.Name())
 
 	var outFile *os.File
 	var outErr error
+	var inFileName = cfg.InFile.Name()
 
-	if *stdout {
+	if cfg.Stdout {
 		outFile = os.Stdout
-		*keep = true
-	} else if *unsnap {
-		in := []rune((*inFile).Name())
+		cfg.Keep = true
+	} else if cfg.Unsnap {
+		in := []rune(inFileName)
 		outFile, outErr = os.OpenFile(string(in[:len(in)-3]), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 
 	} else {
-		outFile, outErr = os.OpenFile((*inFile).Name()+*suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
+		outFile, outErr = os.OpenFile(inFileName+cfg.Suffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fi.Mode())
 	}
-	defer outFile.Close()
-	kingpin.FatalIfError(outErr, "unable to open '%s'", (*inFile).Name())
+	defer func() {
+		debug("Closing outfile")
+		outFile.Close()
+	}()
+	ctx.FatalIfErrorf(outErr, "unable to open '%s'", (*cfg.InFile).Name())
 
 	debug("Outfile: %s", outFile.Name())
 
-	inbuf := bufio.NewReader(*inFile)
+	inbuf := bufio.NewReader(cfg.InFile)
 	outbuf := bufio.NewWriter(outFile)
-	defer outbuf.Flush()
+
+	defer func() {
+		debug("Flushing buffer")
+		outbuf.Flush()
+	}()
 
 	s := NewSnapper(inbuf, outbuf)
 
-	if *unsnap {
+	if cfg.Unsnap {
+		debug("Unsnapping")
 		err := s.Unsnap()
-		kingpin.FatalIfError(err, "error during decompression")
+		ctx.FatalIfErrorf(err, "Error decompressing file: %s", err)
 	} else {
-		err = s.Snap()
-		kingpin.FatalIfError(err, "error during compression")
+		debug("Snapping")
+		err := s.Snap()
+		ctx.FatalIfErrorf(err, "error compressing file: %s", err)
 	}
 
-	(*inFile).Close()
+	defer func() {
+		debug("Closing inFile")
+		cfg.InFile.Close()
+	}()
 
-	if !(*keep) {
+	if !cfg.Keep {
 		debug("Removing source file after completion")
-		err := os.Remove((*inFile).Name())
-		kingpin.FatalIfError(err, "error while removing '%s': %v", (*inFile).Name(), err)
+		err := os.Remove(inFileName)
+		ctx.FatalIfErrorf(err, "error while removing '%s': %v", inFileName, err)
 	}
 }

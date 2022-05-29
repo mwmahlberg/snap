@@ -42,6 +42,8 @@ func (s *Snapper) Snap() error {
 	if w, err := io.Copy(snap, s.in); err != nil {
 		debug("Error compressing file after %d bytes: %v", w, err)
 		return err
+	} else {
+		debug("Wrote %d bytes", w)
 	}
 
 	return nil
