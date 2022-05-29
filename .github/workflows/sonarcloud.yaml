@@ -28,7 +28,7 @@ jobs:
     - name: Create results directory
       run: mkdir test-results/
     - name: Test
-      run: go test -json -coverprofile=test-results/over.out ./... > test-results/result.json
+      run: go test -json -coverprofile=test-results/cover.out ./... > test-results/result.json
 
     - name: list tree
       run: tree
