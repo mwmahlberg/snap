@@ -35,10 +35,10 @@ var (
 	Version = "0.0.0"
 
 	cfg struct {
-		Unsnap  bool     `help:"uncompress file instead of compressing it"`
-		Keep    bool     `help:"keep original file"`
-		Stdout  bool     `help:"write to stdout"`
-		Suffix  string   `help:"set the suffix" default:".sz"`
+		Unsnap  bool     `help:"decompress file instead of compressing it" short:"d"`
+		Keep    bool     `help:"keep original file" short:"k"`
+		Stdout  bool     `help:"write to stdout" short:"c"`
+		Suffix  string   `help:"set the suffix" default:".sz" short:"S"`
 		InFile  *os.File `help:"file to (de)compress" arg:"" optional:""`
 		Version kong.VersionFlag
 	}
