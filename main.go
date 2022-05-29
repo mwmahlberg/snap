@@ -1,4 +1,4 @@
-// Copyright ©2016 Markus W Mahlberg <markus@mahlberg.io>
+// Copyright ©2016-2022 Markus W Mahlberg <markus@mahlberg.io>
 //
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/mwmahlberg/snap/pkg"
 	dbg "github.com/visionmedia/go-debug"
 )
 
@@ -110,7 +111,7 @@ func main() {
 		outbuf.Flush()
 	}()
 
-	s := NewSnapper(inbuf, outbuf)
+	s := pkg.NewSnapper(inbuf, outbuf)
 
 	if cfg.Unsnap {
 		debug("Unsnapping")
