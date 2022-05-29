@@ -39,9 +39,12 @@ func (s *Snapper) Snap() error {
 	debug := dbg.Debug("SNAP")
 
 	snap := snappy.NewBufferedWriter(s.out)
+	defer snap.Flush()
 	if w, err := io.Copy(snap, s.in); err != nil {
 		debug("Error compressing file after %d bytes: %v", w, err)
 		return err
+	} else {
+		debug("Wrote %d bytes", w)
 	}
 
 	return nil
