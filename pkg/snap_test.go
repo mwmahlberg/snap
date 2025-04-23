@@ -17,119 +17,112 @@ package pkg
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/rand"
-	"errors"
 	"io"
-	"path/filepath"
+	"io/ioutil"
+	"math/rand"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	dbg "github.com/visionmedia/go-debug"
 )
 
 var (
-	infileName       = filepath.Join("testdata", "infile.txt")
-	fileCompressed   = filepath.Join("testdata", "compressed.txt.sz")
-	fileDecompressed = filepath.Join("testdata", "decompressed.txt")
-	debug            = dbg.Debug("TEST")
+	debug = dbg.Debug("TEST")
 )
 
-type limitWriter struct {
-	w io.Writer
-	n int
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
 
-func (w *limitWriter) Write(p []byte) (n int, err error) {
-	debug("n: %d", w.n)
+var letters = []rune(" abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-	if len(p) > w.n {
-		p = p[:w.n]
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
 	}
-	if len(p) > 0 {
-		n, err = w.w.Write(p)
-		w.n -= n
-	}
-	if w.n == 0 {
-		err = errors.New("past write limit")
-	}
-	debug("n: %d", w.n)
-	return
+	return string(b)
 }
 
-func TestSnap(t *testing.T) {
-
-	file := make([]byte, 1<<24)
-
-	_, err := rand.Read(file)
-	if err != nil {
-		panic(err)
-	}
-
-	h := md5.New()
-
-	buf := bytes.NewBuffer(file)
-
-	io.Copy(h, buf)
-	expected := h.Sum(nil)
-	t.Logf("MD5 sum of original: %x", expected)
-
-	out := bytes.NewBuffer(nil)
-
-	s := NewSnapper(buf, out)
-
-	assert.NoError(t, s.Snap(), "Error while compressing")
-
-	buf.Reset()
-
-	u := NewSnapper(bytes.NewReader(out.Bytes()), buf)
-	assert.NoError(t, u.Unsnap(), "Error while decompressing")
-
-	io.Copy(h, buf)
-
-	result := h.Sum(nil)
-
-	assert.Equal(t, expected, result)
-
+type SnapperSuite struct {
+	suite.Suite
 }
 
-// func TestLimitedSpaceSnap(t *testing.T) {
+func (suite *SnapperSuite) TestSnapper() {
+	rand := randSeq(1024)
 
-// 	outBuf := bytes.Buffer{}
+	infile, err := ioutil.TempFile("", "")
+	assert.NoError(suite.T(), err)
+	infile.WriteString(rand)
+	assert.NoError(suite.T(), infile.Sync())
 
-// 	lw := &limitWriter{w: &outBuf, n: 1}
+	n := infile.Name()
+	infile.Close()
+	infile, _ = os.Open(n)
+	debug("Infile: %s", infile.Name())
+	outfile, err := ioutil.TempFile("", "")
+	debug("Outfile: %s", outfile.Name())
+	assert.NoError(suite.T(), err)
+	testCases := []struct {
+		desc   string
+		input  io.Reader
+		output io.ReadWriter
+	}{
+		{
+			desc:   "With Buffers",
+			input:  bytes.NewBufferString(rand),
+			output: bytes.NewBuffer(nil),
+		},
+		{
+			desc:   "With Files",
+			input:  infile,
+			output: outfile,
+		},
+	}
+	for _, tC := range testCases {
+		suite.T().Run(tC.desc, func(t *testing.T) {
+			s := NewSnapper(InFile(tC.input), OutFile(tC.output), Mode(SNAP))
+			assert.NoError(t, s.Do())
+			result := bytes.NewBuffer(nil)
+			if seeker, ok := tC.output.(io.ReadWriteSeeker); ok {
+				seeker.Seek(0, 0)
+			}
+			unsnap := NewSnapper(InFile(tC.output), OutFile(result), Mode(UNSNAP))
+			assert.NoError(t, unsnap.Do())
+			assert.EqualValues(t, rand, result.String())
+		})
+	}
+}
 
-// 	in, err := os.Open(infileName)
-// 	if err != nil {
-// 		t.Fatalf("unable to open testfile '%s': %v", infileName, err)
-// 	}
-// 	defer in.Close()
+func (suite *SnapperSuite) TestLackingParams() {
+	testCases := []struct {
+		desc string
+		opts []Option
+	}{
+		{
+			desc: "No Infile",
+			opts: []Option{OutFile(bytes.NewBuffer(nil))},
+		},
+		{
+			desc: "No Outfile",
+			opts: []Option{InFile(bytes.NewBufferString("test"))},
+		},
+		{
+			desc: "No mode",
+			opts: []Option{InFile(bytes.NewBufferString("test")), OutFile(bytes.NewBuffer(nil)), Mode(3)},
+		},
+	}
+	for _, tC := range testCases {
+		suite.T().Run(tC.desc, func(t *testing.T) {
+			s := NewSnapper(tC.opts...)
+			assert.Error(t, s.Do())
+		})
+	}
+}
 
-// 	s := NewSnapper(in, lw)
-
-// 	if err := s.Snap(); err == nil {
-// 		t.Error("No error raised compressing to small buffer")
-// 	}
-// }
-
-// func TestLimitedSpaceUnsnap(t *testing.T) {
-
-// 	/* ----------------- Prepare data ----------------- */
-// 	outbuf := &bytes.Buffer{}
-// 	in, err := os.Open(infileName)
-
-// 	if err != nil {
-// 		t.Fatalf("unable to open testfile '%s': %v", infileName, err)
-// 	}
-
-// 	lw := &limitWriter{w: &bytes.Buffer{}, n: 1}
-
-// 	/* ----------------- Testing ----------------- */
-// 	s := NewSnapper(in, outbuf)
-// 	s.Snap()
-
-// 	u := NewSnapper(outbuf, lw)
-// 	if err := u.Unsnap(); err == nil {
-// 		t.Error("No error raised decompressing to small buffer")
-// 	}
-// }
+func TestExampleTestSuite(t *testing.T) {
+	suite.Run(t, new(SnapperSuite))
+}

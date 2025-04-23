@@ -1,4 +1,4 @@
-// Copyright ©2016 Markus W Mahlberg <markus@mahlberg.io>
+// Copyright ©2016-2022 Markus W Mahlberg <markus@mahlberg.io>
 //
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,47 +17,99 @@ package pkg
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 
 	"github.com/golang/snappy"
 	dbg "github.com/visionmedia/go-debug"
 )
 
+type Operation int
+
+const (
+	SNAP Operation = iota
+	UNSNAP
+)
+
 type Snapper struct {
-	in  io.Reader
-	out io.Writer
+	input  io.Reader
+	output io.Writer
+	keep   bool
+	op     Operation
 }
 
-func NewSnapper(in io.Reader, out io.Writer) *Snapper {
+type Option func(*Snapper)
 
-	snapper := &Snapper{out: out, in: in}
+func InFile(in io.Reader) Option {
+	return func(s *Snapper) {
+		s.input = in
+	}
+}
+
+func OutFile(out io.Writer) Option {
+	return func(s *Snapper) {
+		s.output = out
+	}
+}
+
+func Mode(op Operation) Option {
+	return func(s *Snapper) {
+		s.op = op
+	}
+}
+
+func NewSnapper(options ...Option) *Snapper {
+	snapper := &Snapper{}
+
+	for _, opt := range options {
+		opt(snapper)
+	}
 
 	return snapper
 }
 
-func (s *Snapper) Snap() error {
-	debug := dbg.Debug("SNAP")
-
-	snap := snappy.NewBufferedWriter(s.out)
-	defer snap.Flush()
-	if w, err := io.Copy(snap, s.in); err != nil {
-		debug("Error compressing file after %d bytes: %v", w, err)
-		return err
-	} else {
-		debug("Wrote %d bytes", w)
-	}
-
-	return nil
+func (s *Snapper) Keep() bool {
+	return s.keep
 }
 
-func (s *Snapper) Unsnap() error {
-	debug := dbg.Debug("UNSNAP")
+type BufferedWriter interface {
+	io.Writer
+	Flush() error
+}
 
-	usnap := snappy.NewReader(bufio.NewReader(s.in))
+func (s *Snapper) Do() error {
 
-	if w, err := io.Copy(s.out, usnap); err != nil {
-		debug("Error decompressing file after %d bytes: %v", w, err)
-		return err
+	if s.input == nil {
+		return fmt.Errorf("no input given")
+	} else if s.output == nil {
+		return fmt.Errorf("no output given")
 	}
-	return nil
+	var debug = dbg.Debug("OP")
+
+	var in io.Reader
+	var out BufferedWriter
+
+	debug("Mode identifier: %d", s.op)
+	switch s.op {
+
+	case SNAP:
+		debug("Setting up streams for compression")
+		in = bufio.NewReader(s.input)
+		out = snappy.NewBufferedWriter(s.output)
+
+	case UNSNAP:
+		debug("Setting up streams for decompression")
+		in = snappy.NewReader(bufio.NewReaderSize(s.input, 32768))
+		out = bufio.NewWriter(s.output)
+	default:
+		return fmt.Errorf("unknown operation identifier: %d", s.op)
+	}
+
+	debug("Deferring flush of output")
+	defer out.Flush()
+
+	debug("Copying data")
+	w, err := io.Copy(out, in)
+	debug("Wrote %d bytes", w)
+	return err
 }
